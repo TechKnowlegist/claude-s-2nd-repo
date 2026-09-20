@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pycrawl"
+version = "1.0.0"
+description = "A procedural roguelike dungeon crawler you play in the terminal."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+
+[project.scripts]
+pycrawl = "pycrawl.__main__:main"
+
+[tool.setuptools]
+packages = ["pycrawl"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
