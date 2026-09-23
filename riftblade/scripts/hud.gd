@@ -18,6 +18,10 @@ var _forge_close: Button
 var _pause_root: CenterContainer
 var _pause_resume: Button
 var _pause_retreat: Button
+var _inv_root: CenterContainer
+var _inv_stats: Label
+var _inv_list: VBoxContainer
+var _inv_close: Button
 var _fade: ColorRect
 
 
@@ -32,6 +36,7 @@ func _ready() -> void:
 	overlay.draw.connect(_draw_overlay)
 	_build_forge()
 	_build_pause()
+	_build_inventory()
 	_fade = ColorRect.new()
 	_fade.color = Color.BLACK
 	_fade.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -45,13 +50,15 @@ func _process(delta: float) -> void:
 	if Input.is_action_just_pressed("pause"):
 		if _forge_root.visible:
 			close_forge()
+		elif _inv_root.visible:
+			toggle_inventory()
 		else:
 			toggle_pause()
 	overlay.queue_redraw()
 
 
 func is_blocking() -> bool:
-	return _forge_root.visible or get_tree().paused
+	return _forge_root.visible or _inv_root.visible or get_tree().paused
 
 
 func banner(title: String, sub := "", duration := 3.5) -> void:
@@ -157,6 +164,7 @@ func _refresh_forge() -> void:
 
 func _on_upgrade(stat: String) -> void:
 	if GameState.buy_upgrade(stat):
+		Audio.play("levelup", -6.0)
 		banner("Sword upgraded!", "%s is now level %d" % [GameState.UPGRADES[stat].name, GameState.level(stat)], 1.5)
 		if world != null and world.player != null:
 			world.player.max_hp = GameState.max_health()
@@ -166,6 +174,83 @@ func _on_upgrade(stat: String) -> void:
 	var b: Button = _forge_buttons[stat]
 	if b.disabled:
 		_forge_close.grab_focus()
+
+
+# --- Inventory (swords & armor) ----------------------------------------------------
+
+func _build_inventory() -> void:
+	_inv_root = _make_panel("INVENTORY")
+	var box := _panel_box(_inv_root)
+	_inv_stats = Label.new()
+	_inv_stats.add_theme_font_override("font", font)
+	_inv_stats.add_theme_font_size_override("font_size", 14)
+	_inv_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(_inv_stats)
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(580, 320)
+	box.add_child(scroll)
+	_inv_list = VBoxContainer.new()
+	_inv_list.add_theme_constant_override("separation", 6)
+	_inv_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_inv_list)
+	_inv_close = _button(box, "Close  [I / Esc]", toggle_inventory)
+
+
+func toggle_inventory() -> void:
+	if get_tree().paused or _forge_root.visible:
+		return
+	_inv_root.visible = not _inv_root.visible
+	if _inv_root.visible:
+		Audio.play("click", -10.0)
+		_refresh_inventory()
+		_inv_close.grab_focus()
+
+
+func _refresh_inventory() -> void:
+	_inv_stats.text = "%s   |   %s   |   Shards: %d" % [GameState.sword_name(), GameState.armor_name(), GameState.shards]
+	for c in _inv_list.get_children():
+		c.queue_free()
+	var any := false
+	for type in ["sword", "armor"]:
+		var owned: Array = GameState.gear_of_type(type)
+		if owned.is_empty():
+			continue
+		any = true
+		var header := Label.new()
+		header.add_theme_font_override("font", font)
+		header.add_theme_font_size_override("font_size", 15)
+		header.text = "Swords" if type == "sword" else "Armor"
+		_inv_list.add_child(header)
+		for g in owned:
+			var equipped: bool = g.id == GameState.equipped_sword or g.id == GameState.equipped_armor
+			var bonus: Dictionary = Items.sword_bonus(g) if type == "sword" else Items.armor_bonus(g)
+			var stats_text := ""
+			if type == "sword":
+				stats_text = "+%d dmg, +%d reach" % [int(bonus.damage), int(bonus.reach)]
+			else:
+				stats_text = "+%d hp, -%d%% dmg taken" % [int(bonus.health), int(round(bonus.reduction * 100.0))]
+			var label_text := "%s%s   (%s)" % ["[EQUIPPED] " if equipped else "", Items.label(g), stats_text]
+			if equipped:
+				_inv_list.add_child(_static_label(label_text))
+			else:
+				_button(_inv_list, label_text, _on_equip.bind(g.id))
+	if not any:
+		_inv_list.add_child(_static_label("No gear yet - defeat enemies and open Rift Chests to find swords and armor."))
+
+
+func _static_label(text: String) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_override("font", font)
+	l.add_theme_font_size_override("font_size", 14)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD
+	return l
+
+
+func _on_equip(id: String) -> void:
+	GameState.equip(id)
+	Audio.play("equip", -4.0)
+	_refresh_inventory()
 
 
 func _build_pause() -> void:
@@ -178,7 +263,7 @@ func _build_pause() -> void:
 	help.add_theme_font_override("font", font)
 	help.add_theme_font_size_override("font_size", 14)
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	help.text = "Move: WASD / arrows / stick     Attack: Space / J / left click / X\nDash: Shift / K / right click / A     Items: 1 2 3 / LB RB B     Interact: E / Y"
+	help.text = "Move: WASD / arrows / stick     Attack: Space / J / left click / X\nDash: Shift / K / right click / A     Items: 1 2 3 / LB RB B\nInteract: E / Y     Inventory: I / Select"
 	box.add_child(help)
 
 
@@ -229,7 +314,8 @@ func _draw_overlay() -> void:
 		GameState.sword_name(), int(GameState.sword_damage()), int(GameState.sword_reach()),
 		int(round(GameState.sword_crit() * 100.0)),
 	], 14, txt, outline)
-	var y := 120.0
+	_text(Vector2(20, 112), GameState.armor_name(), 13, Color(txt, 0.75), outline)
+	var y := 136.0
 	for b in p.buffs:
 		_text(Vector2(20, y), "%s  %.1fs" % [Player.BUFF_NAMES[b], p.buffs[b].time], 15, pal.accent, outline)
 		y += 20.0
@@ -240,9 +326,9 @@ func _draw_overlay() -> void:
 		var sub := ""
 		match world.state:
 			"intermission":
-				sub = "Next wave in %d" % int(ceilf(world.state_time)) if world.wave < world.total_waves else "The boss approaches..."
+				sub = "Next room in %d" % int(ceilf(world.state_time)) if world.wave < world.total_waves else "The boss door is open..."
 			"fighting":
-				sub = "Wave %d / %d   -   %d enemies left" % [world.wave, world.total_waves, world.enemies.size() + world.pending_spawns]
+				sub = "Room %d / %d   -   %d enemies left" % [world.wave, world.total_waves, world.enemies.size() + world.pending_spawns]
 			"boss":
 				sub = str(world.data.boss_name)
 			"cleared":
@@ -265,7 +351,7 @@ func _draw_overlay() -> void:
 			overlay.draw_rect(slot, col, false, 3.0)
 			overlay.draw_string(font, Vector2(slot.position.x, slot.position.y + 40), Items.glyph(it), HORIZONTAL_ALIGNMENT_CENTER, slot.size.x, 28, col)
 	if world.is_hub:
-		_text_center(vs.y - 92, "WASD move  -  Space / click attack  -  Shift dash  -  1-3 items  -  E interact  -  Esc pause", 14, Color(txt, 0.7), outline)
+		_text_center(vs.y - 92, "WASD move  -  Space / click attack  -  Shift dash  -  1-3 items  -  E interact  -  I inventory  -  Esc pause", 14, Color(txt, 0.7), outline)
 
 	# Banner
 	if _banner_time > 0.0:

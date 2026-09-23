@@ -31,11 +31,18 @@ func _physics_process(delta: float) -> void:
 				position = position.move_toward(p.position, 560.0 * delta)
 			if d < 20.0:
 				world.collect_shards(value)
+				Audio.play("shard", -6.0)
 				queue_free()
 		"item":
 			if d < 26.0:
-				if GameState.add_item(item):
+				if Items.is_gear(item):
+					GameState.add_gear(item)
+					world.float_text(position + Vector2(0, -20), Items.label(item) + " (inventory)", Items.color(item), 18)
+					Audio.play("equip", -4.0)
+					queue_free()
+				elif GameState.add_item(item):
 					world.float_text(position + Vector2(0, -20), Items.label(item), Items.color(item), 18)
+					Audio.play("pickup", -4.0)
 					queue_free()
 				elif _full_warned <= 0.0:
 					world.float_text(position + Vector2(0, -20), "Item slots full! Use one (1-3)", world.pal.text)

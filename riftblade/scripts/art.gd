@@ -145,8 +145,7 @@ static func entity(ci: CanvasItem, kind: String, style: String, pal: Dictionary,
 			col.a *= alpha
 			match kind:
 				"player":
-					ci.draw_circle(Vector2.ZERO, radius, col)
-					ci.draw_circle(facing * radius * 0.5, radius * 0.3, pal.bg)
+					_minimal_hero(ci, pal, radius, facing, col, t, alpha)
 				"chaser":
 					var pts := PackedVector2Array([
 						facing * radius * 1.35,
@@ -166,6 +165,31 @@ static func entity(ci: CanvasItem, kind: String, style: String, pal: Dictionary,
 					ci.draw_colored_polygon(ngon(radius, 6, t * 0.6), col)
 					ci.draw_colored_polygon(ngon(radius * 0.6, 6, -t * 1.2), pal.bg)
 					ci.draw_colored_polygon(ngon(radius * 0.3, 3, t * 2.0), col)
+
+
+## A small humanoid figure for the "minimal" style: legs, a torso, a head
+## and a trailing cape, instead of a plain circle.
+static func _minimal_hero(ci: CanvasItem, pal: Dictionary, radius: float, facing: Vector2, col: Color, t: float, alpha: float) -> void:
+	var stride := sin(t * 9.0) * radius * 0.3
+	var skin := Color("f2c79b", alpha)
+	var cape := Color(col, alpha * 0.75)
+	# Cape, trailing behind the facing direction. Points go around the
+	# perimeter in order so the quad stays simple (non-self-intersecting).
+	var back := -facing * radius * 1.5
+	var side := facing.orthogonal() * radius * 0.55
+	var back_side := facing.orthogonal() * radius * 0.35
+	ci.draw_colored_polygon(PackedVector2Array([
+		side, back + back_side, back - back_side, -side,
+	]), cape)
+	# Legs.
+	var leg_col := Color(col, alpha).darkened(0.35)
+	ci.draw_line(Vector2(-radius * 0.28, radius * 0.15), Vector2(-radius * 0.28 + stride * 0.4, radius * 1.05), leg_col, radius * 0.32)
+	ci.draw_line(Vector2(radius * 0.28, radius * 0.15), Vector2(radius * 0.28 - stride * 0.4, radius * 1.05), leg_col, radius * 0.32)
+	# Torso.
+	ci.draw_colored_polygon(ngon(radius * 0.72, 8, PI / 8.0, Vector2(0, radius * 0.05)), col)
+	# Head + a hint of a face toward the facing direction.
+	ci.draw_circle(Vector2(0, -radius * 0.85), radius * 0.52, skin)
+	ci.draw_circle(Vector2(0, -radius * 0.85) + facing * radius * 0.3, radius * 0.12, Color(pal.bg, alpha))
 
 
 ## Draws the sword. `progress` is 0..1 during a swing, or < 0 when idle.

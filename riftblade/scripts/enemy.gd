@@ -179,6 +179,7 @@ func _boss_burst(enraged: bool, dir: Vector2) -> void:
 			var d := dir.rotated(a)
 			world.spawn_projectile(position + d * radius, d * shot_speed * 1.4, damage * 0.6)
 	world.shake(4.0)
+	Audio.play("boss_roar", -6.0)
 
 
 func take_damage(amount: float, crit: bool, dir: Vector2) -> void:
@@ -197,6 +198,7 @@ func take_damage(amount: float, crit: bool, dir: Vector2) -> void:
 		txt += "!"
 	world.float_text(position + Vector2(0, -radius - 10.0), txt, world.pal.accent if crit else world.pal.text, 22 if crit else 16)
 	world.shake(3.0 if crit else 1.5)
+	Audio.play("crit" if crit else "hit", -10.0)
 	if hp <= 0.0:
 		die()
 
@@ -205,6 +207,7 @@ func die() -> void:
 	if dead:
 		return
 	dead = true
+	Audio.play("death_enemy", -9.0)
 	died.emit(self)
 	queue_free()
 

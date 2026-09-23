@@ -83,7 +83,7 @@ func _draw() -> void:
 		title = "Return to the Nexus"
 	elif locked:
 		sub = "LOCKED - clear %s" % Dimensions.DATA[info.requires].name
-	elif GameState.cleared.has(target):
+	elif GameState.is_fully_cleared(target):
 		sub = "cleared - replay for shards"
 	else:
 		sub = str(info.tagline)

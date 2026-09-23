@@ -29,9 +29,13 @@ func _run() -> void:
 	var gs := get_node("/root/GameState")
 	gs.save_path = "user://riftblade_shot_save.json"
 	gs.reset()
-	gs.cleared = {"pixel": true}
+	gs.cleared = {"pixel": Dimensions.DATA.pixel.waves + 1}
 	gs.shards = 137
 	gs.items = [{"type": "potion", "rarity": 1}, {"type": "supercharge", "rarity": 3}]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	gs.add_gear(Items._make("sword", 3, rng))
+	gs.add_gear(Items._make("armor", 2, rng))
 	var main: Main = load("res://scenes/main.tscn").instantiate()
 	get_tree().root.add_child(main)
 	await frames(40)
@@ -43,6 +47,8 @@ func _run() -> void:
 		w.player.buffs["shield"] = {"time": 999.0, "power": 1.0}
 		w.state_time = 0.0
 		await frames(200)
+		w.player.position = w.current_room_rect().get_center()
+		await frames(2)
 		w.spawn_item(w.player.position + Vector2(90, 60), {"type": "boost", "rarity": 2})
 		w.spawn_chest(w.player.position + Vector2(-110, 70))
 		for i in 6:

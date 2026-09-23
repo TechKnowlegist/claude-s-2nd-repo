@@ -89,6 +89,11 @@ func _physics_process(delta: float) -> void:
 	if _dash_time > 0.0:
 		_dash_time -= delta
 		velocity = _dash_dir * DASH_SPEED
+	elif world.is_hub:
+		# The Nexus is weightless: you drift toward your input instead of
+		# snapping to it, and keep gliding a little once you let go.
+		var target := input * speed() * 0.85
+		velocity = velocity.lerp(target, clampf(delta * 2.6, 0.0, 1.0))
 	else:
 		velocity = input * speed()
 	move_and_slide()
@@ -100,6 +105,8 @@ func _physics_process(delta: float) -> void:
 			use_item(i)
 	if Input.is_action_just_pressed("interact"):
 		world.interact()
+	if Input.is_action_just_pressed("inventory"):
+		world.hud.toggle_inventory()
 
 
 func speed() -> float:
@@ -121,6 +128,7 @@ func attack() -> void:
 		_swing_arc = TAU
 		_swing_reach *= 1.35
 		dmg *= 1.0 + 0.6 * buffs.supercharge.power
+	Audio.play("swing", -6.0)
 	for e in world.enemies.duplicate():
 		if not is_instance_valid(e) or e.dead:
 			continue
@@ -136,6 +144,7 @@ func attack() -> void:
 func hurt(amount: float, _from_dir: Vector2) -> void:
 	if dead or _invuln > 0.0 or has_buff("shield"):
 		return
+	amount *= 1.0 - GameState.damage_reduction()
 	hp -= amount
 	_invuln = 0.5
 	_flash = 0.12
@@ -145,7 +154,10 @@ func hurt(amount: float, _from_dir: Vector2) -> void:
 		hp = 0.0
 		dead = true
 		world.burst(position, world.pal.player, 20)
+		Audio.play("death_player", -3.0)
 		died.emit()
+	else:
+		Audio.play("player_hit", -8.0)
 
 
 func heal(amount: float) -> void:
@@ -170,6 +182,7 @@ func use_item(slot: int) -> void:
 			buffs["supercharge"] = {"time": 4.0 * power, "power": power}
 		"shield":
 			buffs["shield"] = {"time": 2.0 * power, "power": power}
+	Audio.play("equip" if Items.is_gear(item) else "pickup", -4.0)
 	world.float_text(position + Vector2(0, -40), Items.label(item), Items.color(item))
 	world.burst(position, Items.color(item), 12)
 	GameState.save_game()
@@ -179,10 +192,15 @@ func _draw() -> void:
 	var alpha := 1.0
 	if _invuln > 0.0 and _dash_time <= 0.0 and int(_t * 20.0) % 2 == 0:
 		alpha = 0.35
+	if world.is_hub:
+		draw_set_transform(Vector2(0, sin(_t * 1.6) * 4.0))
 	if has_buff("shield"):
 		draw_arc(Vector2.ZERO, RADIUS + 9.0, 0.0, TAU, 32, Color(world.pal.shard, 0.8), 3.0, true)
 	if has_buff("supercharge"):
 		draw_arc(Vector2.ZERO, RADIUS + 14.0, _t * 6.0, _t * 6.0 + PI * 1.2, 24, Color(world.pal.accent, 0.7), 2.0, true)
+	var armor: Dictionary = GameState.equipped_armor_item()
+	if not armor.is_empty():
+		draw_arc(Vector2.ZERO, RADIUS + 5.0, 0.0, TAU, 20, Color(Items.color(armor), 0.9), 2.0, true)
 	if _dash_time > 0.0:
 		for i in range(1, 4):
 			draw_set_transform(-_dash_dir * i * 14.0)
@@ -190,6 +208,9 @@ func _draw() -> void:
 		draw_set_transform(Vector2.ZERO)
 	Art.entity(self, "player", world.style, world.pal, RADIUS, facing, _flash > 0.0, _t, alpha)
 	var blade: Color = world.pal.accent if has_buff("supercharge") else world.pal.blade
+	var sword: Dictionary = GameState.equipped_sword_item()
+	if not sword.is_empty():
+		blade = blade.lerp(Items.color(sword), 0.55)
 	if _swing > 0.0:
 		Art.sword(self, world.style, _swing_dir, _swing_reach, _swing_arc, 1.0 - _swing / SWING_TIME, blade)
 	else:
