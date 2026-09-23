@@ -295,6 +295,46 @@ func _text_center(y: float, s: String, size: int, color: Color, outline: Color) 
 	overlay.draw_string(font, Vector2(0, y), s, HORIZONTAL_ALIGNMENT_CENTER, w, size, color)
 
 
+## A row of dots across the top of the screen, one per room, so you can
+## see how far through the dimension you are: hollow = ahead, filled +
+## outlined = cleared, a ring = the room you're in now, and a small
+## diamond marks a puzzle room instead of a combat one.
+func _draw_room_tracker(vs: Vector2, world: World, pal: Dictionary, outline: Color) -> void:
+	var total := world.total_waves + 1
+	if total <= 1:
+		return
+	var r := 6.0
+	var gap := 18.0
+	var w := (total - 1) * gap
+	var start_x := vs.x * 0.5 - w * 0.5
+	var y := 84.0
+	var cleared := GameState.rooms_cleared(world.dimension_id)
+	for i in total:
+		var x := start_x + i * gap
+		var is_boss := i == world.total_waves
+		var is_puzzle := not is_boss and i < world.room_kinds.size() and world.room_kinds[i] == "puzzle"
+		var is_current := i == world.current_room and world.state in ["fighting", "puzzle", "boss"]
+		var is_cleared := i < cleared
+		var col: Color = pal.accent if is_cleared else Color(pal.text, 0.35)
+		if is_boss:
+			var pts := PackedVector2Array([Vector2(x, y - r * 1.3), Vector2(x + r * 1.1, y), Vector2(x, y + r * 1.3), Vector2(x - r * 1.1, y)])
+			overlay.draw_colored_polygon(pts, col)
+		elif is_puzzle:
+			var pts := PackedVector2Array([Vector2(x, y - r), Vector2(x + r, y), Vector2(x, y + r), Vector2(x - r, y)])
+			if is_cleared:
+				overlay.draw_colored_polygon(pts, col)
+			else:
+				pts.append(pts[0])
+				overlay.draw_polyline(pts, col, 2.0)
+		else:
+			if is_cleared:
+				overlay.draw_circle(Vector2(x, y), r * 0.75, col)
+			else:
+				overlay.draw_arc(Vector2(x, y), r * 0.75, 0.0, TAU, 16, col, 2.0, true)
+		if is_current:
+			overlay.draw_arc(Vector2(x, y), r * 1.7, 0.0, TAU, 20, pal.accent, 2.0, true)
+
+
 func _draw_overlay() -> void:
 	if world == null or not is_instance_valid(world) or world.player == null:
 		return
@@ -329,6 +369,9 @@ func _draw_overlay() -> void:
 				sub = "Next room in %d" % int(ceilf(world.state_time)) if world.wave < world.total_waves else "The boss door is open..."
 			"fighting":
 				sub = "Room %d / %d   -   %d enemies left" % [world.wave, world.total_waves, world.enemies.size() + world.pending_spawns]
+			"puzzle":
+				var pz := world._puzzle
+				sub = "Puzzle   -   %d / %d pads" % [pz.progress, pz.pad_count] if pz != null and is_instance_valid(pz) else "Puzzle"
 			"boss":
 				sub = str(world.data.boss_name)
 			"cleared":
@@ -338,6 +381,7 @@ func _draw_overlay() -> void:
 			var bb := Rect2(vs.x * 0.5 - 260, 68, 520, 14)
 			overlay.draw_rect(bb.grow(2), Color(0, 0, 0, 0.6))
 			overlay.draw_rect(Rect2(bb.position, Vector2(bb.size.x * world.boss.hp / world.boss.max_hp, bb.size.y)), world.boss.color())
+		_draw_room_tracker(vs, world, pal, outline)
 
 	# Item slots
 	for i in GameState.MAX_ITEMS:

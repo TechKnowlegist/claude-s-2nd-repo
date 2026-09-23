@@ -29,12 +29,15 @@ var player: Player
 var camera: Camera2D
 var solids: Array[Rect2] = []
 var rooms: Array[Rect2] = []
+## "combat" or "puzzle" for each non-boss room, index == room index.
+var room_kinds: Array[String] = []
 var enemies: Array = []
 var boss: Enemy
 var forge: Forge
 var rng := RandomNumberGenerator.new()
 
-## "hub", "intermission", "fighting", "boss", "cleared", "dead" or "leaving".
+## "hub", "intermission", "fighting", "puzzle", "boss", "cleared", "dead"
+## or "leaving".
 var state := "hub"
 var state_time := 0.0
 var wave := 0
@@ -43,6 +46,7 @@ var current_room := 0
 var pending_spawns := 0
 var run_shards := 0
 
+var _puzzle: Puzzle
 var _wall_body: StaticBody2D
 var _gates: Array = []
 var _shake := 0.0
@@ -103,6 +107,8 @@ func _physics_process(delta: float) -> void:
 		"fighting":
 			if pending_spawns == 0 and enemies.is_empty():
 				_wave_cleared()
+		"puzzle":
+			pass  # advanced by Puzzle.solved, see _on_puzzle_solved()
 		"dead":
 			state_time -= delta
 			if state_time <= 0.0:
@@ -135,6 +141,10 @@ func _build_layout() -> void:
 	var total_rooms := total_waves + 1
 	for i in total_rooms:
 		rooms.append(Rect2(Vector2(i * ROOM_SIZE.x, 0), ROOM_SIZE))
+	room_kinds = []
+	for i in total_waves:
+		# Every 3rd room is a breather puzzle instead of a wave of enemies.
+		room_kinds.append("puzzle" if (i + 1) % 3 == 0 else "combat")
 	size = Vector2(ROOM_SIZE.x * total_rooms, ROOM_SIZE.y)
 	_add_boundary(_wall_body, Rect2(Vector2.ZERO, size))
 
@@ -154,6 +164,9 @@ func _build_layout() -> void:
 		_gates.append({"rect": gate_rect, "body": gate_body})
 
 	for i in total_rooms:
+		# Puzzle rooms stay clear of pillars so pads are easy to read.
+		if i < total_waves and room_kinds[i] == "puzzle":
+			continue
 		_add_room_pillars(rooms[i], i)
 
 
@@ -291,13 +304,18 @@ func _next_wave() -> void:
 	if wave > total_waves:
 		state = "boss"
 		current_room = total_waves
+		Audio.play_music(dimension_id)
 		hud.banner(data.boss_name, "BOSS FIGHT")
 		spawn_marker("boss", current_room_rect().get_center(), 1.6)
 		return
-	state = "fighting"
 	current_room = wave - 1
+	if room_kinds[current_room] == "puzzle":
+		_start_puzzle(current_room)
+		return
+	state = "fighting"
+	Audio.play_music(dimension_id, current_room % Audio.VARIANT_TRANSPOSE.size())
 	hud.banner("Room %d / %d" % [wave, total_waves], "")
-	var count := 3 + wave * 2 + tier
+	var count := mini(3 + wave, 12) + tier
 	for i in count:
 		spawn_marker(_roll_enemy_kind(), random_spawn_point(160.0), 0.9 + i * 0.12)
 
@@ -318,6 +336,29 @@ func _wave_cleared() -> void:
 	player.heal(10.0)
 	open_gate(current_room)
 	hud.banner("Room cleared!", "The way forward is open. A Rift Chest appeared.")
+	spawn_chest(free_point_near(player.position, 110.0))
+
+
+func _start_puzzle(idx: int) -> void:
+	state = "puzzle"
+	Audio.play_music("puzzle")
+	var n := mini(3 + idx / 3, 6)
+	_puzzle = Puzzle.new()
+	_puzzle.world = self
+	_puzzle.setup(n, rooms[idx], rng)
+	_puzzle.solved.connect(_on_puzzle_solved)
+	add_child(_puzzle)
+	hud.banner("Puzzle Room", "Step on the pads in order, 1 to %d." % n)
+
+
+func _on_puzzle_solved() -> void:
+	if _puzzle != null and is_instance_valid(_puzzle):
+		_puzzle.queue_free()
+	_puzzle = null
+	state = "intermission"
+	state_time = 3.5
+	open_gate(current_room)
+	hud.banner("Puzzle solved!", "The way forward is open. A Rift Chest appeared.")
 	spawn_chest(free_point_near(player.position, 110.0))
 
 

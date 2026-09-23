@@ -48,14 +48,18 @@ func play(name: String, volume_db := 0.0, pitch := 1.0) -> void:
 
 # --- Music ------------------------------------------------------------------------
 
-func play_music(track: String) -> void:
-	if muted or _current_track == track:
+## `variant` (0-2) picks a related but distinct take on the same track -
+## a different key and slightly different tempo - so a long dimension
+## doesn't loop the exact same music in every room.
+func play_music(track: String, variant := 0) -> void:
+	var key := "%s_%d" % [track, variant]
+	if muted or _current_track == key:
 		return
-	_current_track = track
-	var stream: AudioStreamWAV = _cache.get("music_" + track)
+	_current_track = key
+	var stream: AudioStreamWAV = _cache.get("music_" + key)
 	if stream == null:
-		stream = _build_music(track)
-		_cache["music_" + track] = stream
+		stream = _build_music(track, variant)
+		_cache["music_" + key] = stream
 	var tw := create_tween()
 	tw.tween_property(_music_player, "volume_db", -40.0, 0.35)
 	tw.tween_callback(func() -> void:
@@ -201,6 +205,25 @@ static func _build_sfx(name: String) -> AudioStreamWAV:
 				var env := pow(1.0 - t / 0.05, 2.0)
 				return _osc("sine", 700.0, t) * env * 0.3
 			))
+		"puzzle_step":
+			return _to_stream(_render(0.14, func(t):
+				var env := pow(1.0 - t / 0.14, 1.3)
+				return _osc("sine", 500.0, t) * env * 0.4
+			))
+		"puzzle_wrong":
+			return _to_stream(_render(0.3, func(t):
+				var env := pow(1.0 - t / 0.3, 1.2)
+				var f := lerpf(220.0, 140.0, t / 0.3)
+				return _osc("square", f, t) * env * 0.4
+			))
+		"puzzle_solved":
+			return _to_stream(_render(0.55, func(t):
+				var steps := [523.0, 659.0, 784.0, 1046.0, 1318.0]
+				var idx := mini(int(t / 0.1), steps.size() - 1)
+				var f: float = steps[idx]
+				var env := pow(1.0 - fmod(t, 0.1) / 0.1, 1.1)
+				return _osc("sine", f, t) * env * 0.4
+			))
 		_:
 			return _to_stream(_render(0.05, func(t): return 0.0))
 
@@ -227,13 +250,24 @@ const MUSIC := {
 		C4 + 4, C4 + 11, C4 + 16, C4 + 11,
 		C4 + 2, C4 + 9, C4 + 14, C4 + 9,
 	]},
+	"puzzle": {"wave": "sine", "beat": 0.5, "notes": [
+		C4, C4 + 3, C4 + 7, C4 + 10, C4 + 7, C4 + 3,
+		C4 - 2, C4 + 1, C4 + 5, C4 + 8, C4 + 5, C4 + 1,
+	]},
 }
 
+## Semitones and tempo scale for each of the 3 room-to-room variants, so
+## the same dimension's rooms don't all sound identical.
+const VARIANT_TRANSPOSE := [0, 3, -4]
+const VARIANT_TEMPO := [1.0, 0.9, 1.12]
 
-static func _build_music(track: String) -> AudioStreamWAV:
+
+static func _build_music(track: String, variant := 0) -> AudioStreamWAV:
 	var cfg: Dictionary = MUSIC.get(track, MUSIC.hub)
 	var notes: Array = cfg.notes
-	var beat: float = cfg.beat
+	var v := clampi(variant, 0, VARIANT_TRANSPOSE.size() - 1)
+	var transpose: int = VARIANT_TRANSPOSE[v]
+	var beat: float = cfg.beat * VARIANT_TEMPO[v]
 	var wave: String = cfg.wave
 	var duration := beat * notes.size()
 	var samples := _render(duration, func(t):
@@ -244,7 +278,7 @@ static func _build_music(track: String) -> AudioStreamWAV:
 		var local_t := fmod(t, beat)
 		var env := clampf(1.0 - local_t / beat, 0.0, 1.0)
 		env = pow(env, 0.6) * 0.22
-		var freq := _midi_hz(note + 48)
+		var freq := _midi_hz(note + 48 + transpose)
 		var lead := _osc(wave, freq, t)
 		var sub := _osc("sine", freq * 0.5, t) * 0.35
 		return (lead + sub) * env

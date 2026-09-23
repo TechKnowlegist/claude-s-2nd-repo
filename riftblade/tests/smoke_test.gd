@@ -101,6 +101,31 @@ func _run() -> void:
 		w.player.attack()
 		check(target.hp < hp_before, "sword swing damages an enemy in front")
 
+	print("Puzzle room")
+	for e in w.enemies.duplicate():
+		e.die()
+	await frames(260)
+	check(w.state == "puzzle" and w.room_kinds[w.current_room] == "puzzle", "room 3 is a puzzle room")
+	var pz: Puzzle = w._puzzle
+	check(pz != null and pz.pads.size() == pz.pad_count, "the puzzle has its full set of pads")
+	if pz:
+		var puzzle_room := w.current_room
+		var ordered: Array = pz.pads.duplicate()
+		ordered.sort_custom(func(a, b): return a.number < b.number)
+		if ordered.size() > 2:
+			w.player.position = ordered[0].pos
+			await frames(5)
+			check(pz.progress == 1, "stepping the first pad advances progress")
+			w.player.position = ordered[ordered.size() - 1].pos
+			await frames(5)
+			check(pz.progress == 0, "stepping on a pad out of order resets progress")
+			w.player.position = ordered[ordered.size() - 1].pos + Vector2(300, 300)
+			await frames(5)
+		for pad in ordered:
+			w.player.position = pad.pos
+			await frames(5)
+		check(w.state == "intermission" and not w.solids.has(w._gates[puzzle_room].rect), "stepping the pads in order solves the puzzle and opens the next door")
+
 	print("Items")
 	gs.items.clear()
 	gs.add_item({"type": "supercharge", "rarity": 3})

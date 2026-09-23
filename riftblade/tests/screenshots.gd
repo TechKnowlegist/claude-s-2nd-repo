@@ -63,5 +63,24 @@ func _run() -> void:
 		await frames(4)
 		await _snap("2_" + dim)
 
+	# A puzzle room, mid-solve.
+	main.load_world("pixel")
+	var pw: World = main.world
+	pw.player.buffs["shield"] = {"time": 999.0, "power": 1.0}
+	for e in pw.enemies.duplicate():
+		e.die()
+	pw.wave = 2
+	pw.state = "intermission"
+	pw.state_time = 0.0
+	await frames(10)
+	if pw.state == "puzzle" and pw._puzzle != null:
+		var ordered: Array = pw._puzzle.pads.duplicate()
+		ordered.sort_custom(func(a, b): return a.number < b.number)
+		if ordered.size() > 0:
+			pw.player.position = ordered[0].pos
+			pw.player.facing = Vector2.RIGHT
+			await frames(3)
+	await _snap("3_puzzle")
+
 	gs.reset()
 	get_tree().quit()

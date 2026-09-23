@@ -280,6 +280,34 @@ static func chest(ci: CanvasItem, style: String, pal: Dictionary, pos: Vector2) 
 			ci.draw_rect(Rect2(pos - Vector2(4, 6), Vector2(8, 8)), pal.bg)
 
 
+## A puzzle pressure pad. `state` is "idle" (not pressed yet, shows its
+## required order number), "done" (pressed correctly, stays lit) or
+## "wrong" (briefly flashes red after a wrong-order press).
+static func pad(ci: CanvasItem, style: String, pal: Dictionary, number: int, state: String, radius: float) -> void:
+	var col: Color = pal.text
+	match state:
+		"done":
+			col = pal.shard
+		"wrong":
+			col = Color("ff4444")
+	match style:
+		"pixel":
+			var px := PX * 1.5
+			var n := int(radius * 2.0 / px)
+			for x in n:
+				for y in n:
+					if Vector2(x - n * 0.5, y - n * 0.5).length() < n * 0.5:
+						ci.draw_rect(Rect2(Vector2(x, y) * px - Vector2(radius, radius), Vector2(px, px)), col)
+			glyph(ci, Vector2.ZERO, str(number), 18, Color.BLACK if state == "done" else Color.WHITE)
+		"ascii":
+			var bracket := "[%d]" if state != "wrong" else "!%d!"
+			glyph(ci, Vector2.ZERO, bracket % number, 20, col, 1.0 if state != "idle" else 0.3)
+		_:
+			ci.draw_circle(Vector2.ZERO, radius, Color(col, 0.28 if state == "idle" else 0.6))
+			ci.draw_arc(Vector2.ZERO, radius, 0.0, TAU, 28, col, 3.0, true)
+			glyph(ci, Vector2.ZERO, str(number), 20, col)
+
+
 static func projectile(ci: CanvasItem, style: String, color: Color, radius: float) -> void:
 	match style:
 		"pixel":

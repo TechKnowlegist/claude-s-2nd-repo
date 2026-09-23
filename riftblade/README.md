@@ -14,12 +14,18 @@ synthesized in code, same as the art — no external asset files at all.
 Every dimension is drawn entirely in code, in its own visual style, and
 is built as a line of enclosed rooms connected by gated doorways: each
 room holds one wave, and its door only opens once the room is cleared.
+Every 3rd room swaps combat for a **puzzle room** instead — step on a
+scatter of numbered pads in ascending order to open the door forward;
+stepping out of order resets your progress. A room-tracker strip along
+the top of the HUD shows the whole dimension at a glance (circles for
+combat rooms, diamonds for puzzles, a bigger diamond for the boss),
+which room is cleared, and which one you're in.
 
 | Dimension | Style | Rooms | Boss |
 |---|---|---|---|
-| The Pixel Realm | chunky pixel-art sprites | 4 + boss room | King Blob |
-| The ASCII Void | glowing text glyphs | 5 + boss room | The Glyph Daemon |
-| The Geometric Rift | clean geometric shapes | 6 + boss room | The Perfect Form |
+| The Pixel Realm | chunky pixel-art sprites | 6 + boss room | King Blob |
+| The ASCII Void | glowing text glyphs | 8 + boss room | The Glyph Daemon |
+| The Geometric Rift | clean geometric shapes | 10 + boss room | The Perfect Form |
 
 Clearing a dimension's boss unlocks the next one and drops a guaranteed
 piece of gear plus shards. An **Online Arena** portal is already placed
@@ -60,8 +66,11 @@ There isn't a single audio file in the project — `scripts/audio.gd`
 synthesizes every sound effect and music loop as raw waveforms at
 runtime (sine/square/saw oscillators with an envelope), the same way
 `art.gd` draws everything in code instead of using sprites. Each
-dimension (plus the Nexus) has its own looping chiptune-style track, and
-sword swings, hits, pickups, gates opening, portals, and the boss roar
+dimension (plus the Nexus and the puzzle rooms) has its own looping
+chiptune-style track; combat rooms cycle through 3 key/tempo variants of
+their dimension's track as you go deeper, so a long dimension doesn't
+loop the exact same music in every room. Sword swings, hits, pickups,
+gates opening, portals, puzzle steps/mistakes/solves, and the boss roar
 all have their own procedural one-shot sound.
 
 ## Development
@@ -73,13 +82,14 @@ The gameplay code lives in `scripts/`:
 - `dimensions.gd` / `items.gd` — static data for worlds and loot (consumables + gear)
 - `art.gd` — all procedural rendering (pixel/ASCII/geometric styles)
 - `world.gd` — room-by-room dungeon layout, gated doors, wave spawning, the Nexus hub
+- `puzzle.gd` — the pad-ordering puzzle rooms
 - `player.gd` / `enemy.gd` / `projectile.gd` / `pickup.gd` / `portal.gd` / `forge.gd`
-- `hud.gd` — HUD, Forge menu, Inventory menu, pause menu
+- `hud.gd` — HUD (incl. the room-tracker minimap), Forge menu, Inventory menu, pause menu
 - `main.gd` — swaps between the Nexus and dimensions
 
 An end-to-end test that drives an entire play session (hub → Forge →
-portal → rooms/gates → combat → items → gear/inventory → boss → death →
-save/load) lives in `tests/smoke_test.gd`. Run it headless:
+portal → rooms/gates → combat → puzzle room → items → gear/inventory →
+boss → death → save/load) lives in `tests/smoke_test.gd`. Run it headless:
 
 ```bash
 godot --headless --fixed-fps 60 --path riftblade res://tests/smoke_test.tscn
